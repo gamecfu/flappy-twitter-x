@@ -1,0 +1,15 @@
+{
+  "name": "flappy-bird-game",
+  "version": "0.1.0",
+  "description": "Minimal vanilla JS Flappy-style game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
