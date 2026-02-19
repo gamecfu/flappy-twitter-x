@@ -1,6 +1,36 @@
+// Firebase setup (browser modules via CDN)
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
+import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCZdxP7LoP7FWbD8OQ36DgrP1BoBJen6T0",
+  authDomain: "flappy-twitter-x.firebaseapp.com",
+  projectId: "flappy-twitter-x",
+  storageBucket: "flappy-twitter-x.firebasestorage.app",
+  messagingSenderId: "205091803595",
+  appId: "1:205091803595:web:29a9f5b0c9295bac26264e",
+  measurementId: "G-QHB7SGZXD5"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let leaderboard = [];
+let showLeaderboard = false;
+let gameOver = false;
+let finalScore = 0;
+
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
+
+const nameInputDiv = document.getElementById('name-input');
+const leaderboardDiv = document.getElementById('leaderboard');
+const playerNameInput = document.getElementById('player-name');
+const submitBtn = document.getElementById('submit-score');
+const closeBtn = document.getElementById('close-leaderboard');
+const finalScoreSpan = document.getElementById('final-score');
+const scoresList = document.getElementById('scores-list');
 
 // Images loader
 const images = {};
@@ -66,7 +96,9 @@ function spawnPipe(){
 }
 
 function reset(){
-  player.y = H/2; player.vy = 0; pipes = []; score = 0; tick = 0; running = true;
+  player.y = H/2; player.vy = 0; pipes = []; score = 0; tick = 0; running = true; gameOver = false; showLeaderboard = false;
+  nameInputDiv.classList.add('hidden');
+  leaderboardDiv.classList.add('hidden');
 }
 
 function pauseBackgroundMusic(){
@@ -80,13 +112,50 @@ function resumeBackgroundMusic(){
     try{ gameMusic.muted = false; gameMusic.play().catch(()=>{}); }catch(e){}
   }
 }
+async function submitScore(name, score) {
+  try {
+    const docRef = await addDoc(collection(db, 'scores'), {
+      name: name,
+      score: score,
+      timestamp: new Date().toISOString()
+    });
+    console.log('Score submitted, id=', docRef.id);
+    return true;
+  } catch (e) {
+    console.error('Error submitting score:', e);
+    return false;
+  }
+}
 
+async function fetchLeaderboard() {
+  try {
+    const q = query(collection(db, 'scores'), orderBy('score', 'desc'), limit(10));
+    const querySnapshot = await getDocs(q);
+    leaderboard = [];
+    querySnapshot.forEach((doc) => {
+      leaderboard.push(doc.data());
+    });
+    console.log('Leaderboard fetched', leaderboard);
+  } catch (e) {
+    console.error('Error fetching leaderboard:', e);
+    leaderboard = [{name: 'Offline', score: 0}];
+  }
+}
+
+function populateLeaderboard() {
+  scoresList.innerHTML = '';
+  leaderboard.forEach((entry, index) => {
+    const li = document.createElement('li');
+    li.textContent = `${index+1}. ${entry.name}: ${entry.score}`;
+    scoresList.appendChild(li);
+  });
+}
 function update(dt){
   if(!running) return;
   player.vy += gravity;
   player.y += player.vy;
 
-  if(player.y+player.r > H){ player.y = H-player.r; player.vy = 0; running = false; }
+  if(player.y+player.r > H){ player.y = H-player.r; player.vy = 0; running = false; gameOver = true; finalScore = score; }
   if(player.y-player.r < 0){ player.y = player.r; player.vy = 0; }
 
   if(tick % 90 === 0) spawnPipe();
@@ -105,6 +174,8 @@ function update(dt){
     if(inX){
       if(player.y - player.r < p.top || player.y + player.r > p.top + p.gap) {
         running = false;
+        gameOver = true;
+        finalScore = score;
         pauseBackgroundMusic();
       }
     }
@@ -169,7 +240,7 @@ function draw(){
   ctx.fillStyle = '#111';
   ctx.font = '22px sans-serif';
   ctx.fillText('Score: ' + score, 12, 28);
-  if(!running){
+  if(!running && !gameOver && !showLeaderboard){
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(W/2-140, H/2-60, 280, 120);
     ctx.fillStyle = '#fff';
@@ -178,6 +249,20 @@ function draw(){
     ctx.fillText('Game Over', W/2, H/2-10);
     ctx.fillText('Click or Space to restart', W/2, H/2+28);
     ctx.textAlign = 'left';
+  }
+
+  // Show overlays when game over or leaderboard visible
+  if(gameOver){
+    finalScoreSpan.textContent = finalScore;
+    nameInputDiv.classList.remove('hidden');
+    playerNameInput.focus();
+  } else {
+    nameInputDiv.classList.add('hidden');
+  }
+  if(showLeaderboard){
+    leaderboardDiv.classList.remove('hidden');
+  } else {
+    leaderboardDiv.classList.add('hidden');
   }
 }
 
@@ -196,11 +281,72 @@ function flap(){
 window.addEventListener('keydown', e => {
   // user gesture — allow unmuting/playing music
   if(!userInteracted){ userInteracted = true; if(gameMusic){ try{ gameMusic.muted = false; gameMusic.play().catch(()=>{}); }catch(e){} } }
-  if(e.code === 'Space'){ if(!running) reset(); flap(); }
+  if(e.code === 'Space'){
+    if(running) {
+      flap();
+    } else {
+      // allow restart even after gameOver / overlay shown
+      reset();
+    }
+  }
 });
 canvas.addEventListener('pointerdown', () => { 
   if(!userInteracted){ userInteracted = true; if(gameMusic){ try{ gameMusic.muted = false; gameMusic.play().catch(()=>{}); }catch(e){} } }
-  if(!running) reset(); flap();
+  if(running) flap(); else reset();
+});
+
+submitBtn.addEventListener('click', async () => {
+  const name = playerNameInput.value.trim();
+  console.log('Submit clicked', {name, finalScore});
+  if(!name) return;
+  // disable button while we process UI; we'll re-enable immediately to avoid hangs
+  submitBtn.disabled = true;
+  // Save locally first so UI is responsive even if remote hangs
+  try {
+    const key = 'flappy_scores';
+    const raw = localStorage.getItem(key);
+    const arr = raw ? JSON.parse(raw) : [];
+    arr.push({ name, score: finalScore, timestamp: new Date().toISOString() });
+    arr.sort((a,b) => b.score - a.score);
+    localStorage.setItem(key, JSON.stringify(arr.slice(0, 50)));
+    console.log('Saved score locally (optimistic)');
+  } catch(e){ console.error('Local save failed', e); }
+
+  nameInputDiv.classList.add('hidden');
+  // fetch remote leaderboard (may fallback inside) and merge local scores
+  await fetchLeaderboard();
+  // merge local scores into leaderboard for display
+  try{
+    const raw = localStorage.getItem('flappy_scores');
+    if(raw){
+      const local = JSON.parse(raw);
+      const seen = new Set(leaderboard.map(e=>`${e.name}|${e.score}|${e.timestamp||''}`));
+      for(const s of local){
+        const key = `${s.name}|${s.score}|${s.timestamp||''}`;
+        if(!seen.has(key)) leaderboard.push(s);
+      }
+      leaderboard.sort((a,b)=>b.score - a.score);
+      leaderboard = leaderboard.slice(0,10);
+    }
+  }catch(e){ console.warn('Failed to merge local scores', e); }
+
+  populateLeaderboard();
+  leaderboardDiv.classList.remove('hidden');
+  showLeaderboard = true;
+  // re-enable button immediately; remote submit will run in background
+  submitBtn.disabled = false;
+
+  // Perform remote submit in background (don't await here to avoid UI hangs)
+  submitScore(name, finalScore).then(ok => {
+    if(ok) console.log('Remote submit succeeded');
+    else console.warn('Remote submit returned false');
+  }).catch(e => console.warn('Background submit error', e));
+});
+
+closeBtn.addEventListener('click', () => {
+  leaderboardDiv.classList.add('hidden');
+  showLeaderboard = false;
+  reset();
 });
 
 // resume music automatically when player restarts (if they've already interacted)
