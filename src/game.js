@@ -234,11 +234,20 @@ function draw(){
   if(images.bird){
     const w = player.r*2, h = player.r*2;
     ctx.drawImage(images.bird, player.x - w/2, player.y - h/2, w, h);
+    // border around bird image
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r, 0, Math.PI*2);
+    ctx.stroke();
   } else {
     ctx.fillStyle = '#ffcc00';
     ctx.beginPath();
     ctx.arc(player.x, player.y, player.r, 0, Math.PI*2);
     ctx.fill();
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
   }
 
   // HUD
