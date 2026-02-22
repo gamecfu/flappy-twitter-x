@@ -304,48 +304,19 @@ submitBtn.addEventListener('click', async () => {
   const name = playerNameInput.value.trim();
   console.log('Submit clicked', {name, finalScore});
   if(!name) return;
-  // disable button while we process UI; we'll re-enable immediately to avoid hangs
   submitBtn.disabled = true;
-  // Save locally first so UI is responsive even if remote hangs
-  try {
-    const key = 'flappy_scores';
-    const raw = localStorage.getItem(key);
-    const arr = raw ? JSON.parse(raw) : [];
-    arr.push({ name, score: finalScore, timestamp: new Date().toISOString() });
-    arr.sort((a,b) => b.score - a.score);
-    localStorage.setItem(key, JSON.stringify(arr.slice(0, 50)));
-    console.log('Saved score locally (optimistic)');
-  } catch(e){ console.error('Local save failed', e); }
-
   nameInputDiv.classList.add('hidden');
-  // fetch remote leaderboard (may fallback inside) and merge local scores
-  await fetchLeaderboard();
-  // merge local scores into leaderboard for display
-  try{
-    const raw = localStorage.getItem('flappy_scores');
-    if(raw){
-      const local = JSON.parse(raw);
-      const seen = new Set(leaderboard.map(e=>`${e.name}|${e.score}|${e.timestamp||''}`));
-      for(const s of local){
-        const key = `${s.name}|${s.score}|${s.timestamp||''}`;
-        if(!seen.has(key)) leaderboard.push(s);
-      }
-      leaderboard.sort((a,b)=>b.score - a.score);
-      leaderboard = leaderboard.slice(0,10);
-    }
-  }catch(e){ console.warn('Failed to merge local scores', e); }
 
+  // Submit to Firestore then fetch updated leaderboard
+  const ok = await submitScore(name, finalScore);
+  if(ok) console.log('Score submitted to Firestore');
+  else console.warn('Firestore submit failed');
+
+  await fetchLeaderboard();
   populateLeaderboard();
   leaderboardDiv.classList.remove('hidden');
   showLeaderboard = true;
-  // re-enable button immediately; remote submit will run in background
   submitBtn.disabled = false;
-
-  // Perform remote submit in background (don't await here to avoid UI hangs)
-  submitScore(name, finalScore).then(ok => {
-    if(ok) console.log('Remote submit succeeded');
-    else console.warn('Remote submit returned false');
-  }).catch(e => console.warn('Background submit error', e));
 });
 
 closeBtn.addEventListener('click', () => {

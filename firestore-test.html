@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Firestore Connection Test</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #111; color: #eee; }
+    .ok  { color: #4caf50; }
+    .err { color: #f44336; }
+    .inf { color: #2196f3; }
+    pre  { background: #222; padding: 10px; border-radius: 6px; white-space: pre-wrap; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 8px 4px; }
+  </style>
+</head>
+<body>
+  <h2>🔥 Firestore Connection Test</h2>
+  <button id="btn-write">Write test doc</button>
+  <button id="btn-read">Read leaderboard</button>
+  <button id="btn-clear">Clear log</button>
+  <pre id="log">Click a button to run a test...</pre>
+
+  <script type="module">
+    import { initializeApp }    from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
+    import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs }
+      from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js';
+    import { getAuth, signInAnonymously }
+      from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey:            "AIzaSyCZdxP7LoP7FWbD8OQ36DgrP1BoBJen6T0",
+      authDomain:        "flappy-twitter-x.firebaseapp.com",
+      projectId:         "flappy-twitter-x",
+      storageBucket:     "flappy-twitter-x.firebasestorage.app",
+      messagingSenderId: "205091803595",
+      appId:             "1:205091803595:web:29a9f5b0c9295bac26264e",
+    };
+
+    const app  = initializeApp(firebaseConfig);
+    const db   = getFirestore(app, 'flappy-twitter-x'); // named database
+    const auth = getAuth(app);
+    const log  = document.getElementById('log');
+
+    function write(msg, cls='inf') {
+      const span = document.createElement('span');
+      span.className = cls;
+      span.textContent = `[${new Date().toISOString()}] ${msg}\n`;
+      log.appendChild(span);
+    }
+
+    // Sign in anonymously on load
+    write('Signing in anonymously...');
+    signInAnonymously(auth)
+      .then(cred => write(`✅ Signed in anonymously, uid=${cred.user.uid}`, 'ok'))
+      .catch(e  => write(`❌ Anonymous sign-in failed: ${e.message}`, 'err'));
+
+    document.getElementById('btn-write').addEventListener('click', async () => {
+      write('Writing test document to scores...');
+      try {
+        const ref = await addDoc(collection(db, 'scores'), {
+          name:  'ConnectionTest',
+          score: 0,
+          timestamp: new Date().toISOString()
+        });
+        write(`✅ Write succeeded! Doc id: ${ref.id}`, 'ok');
+      } catch(e) {
+        write(`❌ Write failed: ${e.code} — ${e.message}`, 'err');
+      }
+    });
+
+    document.getElementById('btn-read').addEventListener('click', async () => {
+      write('Reading leaderboard (top 10)...');
+      try {
+        const q  = query(collection(db, 'scores'), orderBy('score', 'desc'), limit(10));
+        const qs = await getDocs(q);
+        write(`✅ Read succeeded! ${qs.size} document(s) returned`, 'ok');
+        qs.forEach(doc => write(`   → ${JSON.stringify(doc.data())}`, 'ok'));
+      } catch(e) {
+        write(`❌ Read failed: ${e.code} — ${e.message}`, 'err');
+      }
+    });
+
+    document.getElementById('btn-clear').addEventListener('click', () => {
+      log.innerHTML = '';
+    });
+  </script>
+</body>
+</html>
