@@ -160,7 +160,7 @@ function update(dt){
   player.vy += gravity;
   player.y += player.vy;
 
-  if(player.y+player.r > H){ player.y = H-player.r; player.vy = 0; running = false; gameOver = true; finalScore = score; }
+  if(player.y+player.r > H){ player.y = H-player.r; player.vy = 0; running = false; gameOver = true; finalScore = score; pauseBackgroundMusic(); }
   if(player.y-player.r < 0){ player.y = player.r; player.vy = 0; }
 
   if(tick % 90 === 0) spawnPipe();
