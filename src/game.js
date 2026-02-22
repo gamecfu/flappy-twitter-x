@@ -1,6 +1,7 @@
 // Firebase setup (browser modules via CDN)
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
-import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js';
+import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js';
+import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyCZdxP7LoP7FWbD8OQ36DgrP1BoBJen6T0",
@@ -13,7 +14,11 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const db = getFirestore(app, 'flappy-twitter-x'); // named database (not the default)
+
+// Sign in anonymously so Firestore rules that require auth will allow writes
+const auth = getAuth(app);
+signInAnonymously(auth).then(()=>console.log('Signed in anonymously')).catch(e=>console.warn('Anonymous auth failed', e));
 
 let leaderboard = [];
 let showLeaderboard = false;
@@ -117,7 +122,7 @@ async function submitScore(name, score) {
     const docRef = await addDoc(collection(db, 'scores'), {
       name: name,
       score: score,
-      timestamp: new Date().toISOString()
+      timestamp: serverTimestamp()
     });
     console.log('Score submitted, id=', docRef.id);
     return true;
@@ -144,9 +149,9 @@ async function fetchLeaderboard() {
 
 function populateLeaderboard() {
   scoresList.innerHTML = '';
-  leaderboard.forEach((entry, index) => {
+  leaderboard.forEach((entry) => {
     const li = document.createElement('li');
-    li.textContent = `${index+1}. ${entry.name}: ${entry.score}`;
+    li.textContent = `${entry.name}: ${entry.score}`;
     scoresList.appendChild(li);
   });
 }
