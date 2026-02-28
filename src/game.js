@@ -82,6 +82,10 @@ function loadImages(cb){
 let last = 0;
 const gravity = 0.45;
 
+// Fixed timestep: game logic always runs at 60 ticks/sec
+const FIXED_DT = 1000 / 60;    // ~16.67ms per tick
+let accumulator = 0;
+
 const player = {
   x: 80,
   y: H/2,
@@ -190,6 +194,7 @@ function reset(){
   lives = MAX_LIVES; invincibleTimer = 0;
   orbs = []; orbSpawnTimer = 0; orbPickupTimer = 0; orbPickupText = '';
   extraLifeTimers = []; overcharged = false; overchargeFlame = 0;
+  accumulator = 0; last = 0;
   nameInputDiv.classList.add('hidden');
   leaderboardDiv.classList.add('hidden');
 }
@@ -243,7 +248,7 @@ function populateLeaderboard() {
     scoresList.appendChild(li);
   });
 }
-function update(dt){
+function update(){
   if(!running) return;
   player.vy += gravity;
   player.y += player.vy;
@@ -594,9 +599,19 @@ function draw(){
 }
 
 function loop(ts){
-  const dt = (ts - last) / 16.67;
+  if(last === 0) last = ts;         // first frame — no huge delta
+  let elapsed = ts - last;
   last = ts;
-  update(dt);
+  // Clamp to avoid spiral-of-death on tab-switch or lag spikes
+  if(elapsed > 200) elapsed = 200;
+  accumulator += elapsed;
+
+  // Run fixed-step updates until we've consumed the accumulated time
+  while(accumulator >= FIXED_DT){
+    update();
+    accumulator -= FIXED_DT;
+  }
+
   draw();
   requestAnimationFrame(loop);
 }
