@@ -59,6 +59,13 @@ Notes for friends
 - Controls: press Space or click/tap to flap. The page will attempt to enable background audio after a click or keypress (browser policy requires a gesture).
 - If audio is silent, ensure the browser tab isn't muted and click the canvas once to allow playback.
 
+DOOM Mode
+- Unlock DOOM mode by reaching level 7 in normal mode.
+- **Shotgun:** fire with the shotgun button — requires green ammo orbs.
+- **Green ammo orbs** spawn at a 60 % rate in DOOM mode. Each pickup gives +3 ammo, but ammo is capped at **6**.
+- **Black orbs** slow you down for 3 seconds — watch out!
+- **Rage ability:** sacrifice a heart for bonus points and a 3-second shield.
+
 Files of interest
 - `index.html` — entry page
 - `style.css` — visual styles

@@ -26,6 +26,11 @@ let gameOver = false;
 let finalScore = 0;
 let scoreSubmitted = false;  // tracks if score was submitted (prevents draw loop re-showing name input)
 
+// "Only DOOM" ending — triggers at 1500 in normal mode
+let doomEndingTimer = 0;
+const DOOM_ENDING_DURATION = 240; // 4 seconds at 60fps
+let doomEndingTriggered = false;
+
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
@@ -163,7 +168,7 @@ const normalLevels = [
 
 const doomLevels = [
   { name: "Hell's Gate 💀",  threshold: 0,   speed: 3.0, spawnRate: 58, gap: 155, pointMultiplier: 8,  hell: true, hellGate: true },
-  { name: 'True Hell 🔥💀',  threshold: 500, speed: 4.2, spawnRate: 44, gap: 138, pointMultiplier: 15, hell: true },
+  { name: 'True Hell 🔥💀',  threshold: 1000, speed: 4.2, spawnRate: 44, gap: 138, pointMultiplier: 15, hell: true },
 ];
 
 let levels = normalLevels;
@@ -198,7 +203,8 @@ const BEAM_WIDTH = 8;
 // --- Orb System ---
 let orbs = [];
 let orbSpawnTimer = 0;
-const ORB_SPAWN_INTERVAL = 200; // frames between orb spawn attempts (~3.3 sec, more frequent)
+const ORB_SPAWN_INTERVAL = 200; // frames between orb spawn attempts (~3.3 sec)
+const DOOM_ORB_SPAWN_INTERVAL = 120; // faster orb spawns in DOOM mode (~2 sec)
 const ORB_RADIUS = 12;
 const BASE_ORB_CHANCE = 0.70;  // 70% base chance to spawn an orb
 let orbSpawnChance = BASE_ORB_CHANCE; // escalates by 5% each miss
@@ -221,16 +227,22 @@ const SHOTGUN_LENGTH = 25;
 const SHOTGUN_WIDTH = 6;
 let shotgunAmmo = 3;               // start with 3 ammo
 const SHOTGUN_START_AMMO = 3;
-const AMMO_PER_PICKUP = 3;         // each green orb gives 3 ammo
+const AMMO_PER_PICKUP = 6;         // each green orb gives 6 ammo
+const MAX_AMMO = 24;               // maximum ammo the player can carry
 let shotgunBlasts = [];            // blast animations [{x,y,timer,maxTimer}]
+
+// --- Scaling System (every 5000 score) ---
+let lastScaleTier = 0;             // tracks which 5000-tier we last applied
+let scoreMultiplier = 1;           // doubles every 5000 score
+let ammoChancePenalty = 0;         // cumulative ammo chance reduction (0.05 per tier)
 
 // Rage ability (DOOM only — costs 1 heart, gives points + 3s shield)
 let rageCooldown = 0;
 const RAGE_COOLDOWN = 60;          // 1 second cooldown to prevent spam
 const RAGE_SHIELD_DURATION = 180;  // 3 seconds shield
-const RAGE_POINT_BONUS = 25;       // bonus points from rage
+const RAGE_POINT_BONUS = 100;      // flat bonus points from rage
 
-// True Rage (3 blue hearts in DOOM → lose 2, clear pipes 1s, +100 pts)
+// True Rage (3 blue hearts in DOOM → lose 2, clear pipes 1s, +3000 pts)
 let trueRageTimer = 0;
 const TRUE_RAGE_DURATION = 60;     // 1 second
 let trueRageFlash = 0;
@@ -265,10 +277,10 @@ function activateRage(){
   // remove an extra life timer if we had blue hearts
   if(lives >= MAX_LIVES && extraLifeTimers.length > 0) extraLifeTimers.pop();
   else if(lives < MAX_LIVES){ /* lost a red heart */ }
-  score += RAGE_POINT_BONUS * getLevelConfig().pointMultiplier;
+  score += RAGE_POINT_BONUS * scoreMultiplier;
   invincibleTimer = RAGE_SHIELD_DURATION;
   rageCooldown = RAGE_COOLDOWN;
-  orbPickupText = '🔥 RAGE! +' + (RAGE_POINT_BONUS * getLevelConfig().pointMultiplier) + ' pts';
+  orbPickupText = '🔥 RAGE! +' + (RAGE_POINT_BONUS * scoreMultiplier) + ' pts';
   orbPickupTimer = 90;
 }
 
@@ -285,22 +297,26 @@ function triggerTrueRage(){
   pipes = [];
   trueRageTimer = TRUE_RAGE_DURATION;
   trueRageFlash = 0;
-  score += 100;
-  orbPickupText = '💀 TRUE RAGE! +100 pts 💀';
+  score += 3000 * scoreMultiplier;
+  orbPickupText = '💀 TRUE RAGE! +' + (3000 * scoreMultiplier) + ' pts 💀';
   orbPickupTimer = 120;
 }
 
 function spawnOrb(){
   let type;
   if(isDoomMode){
+    // Ammo chance reduced by 5% for every 5000-score tier
+    const ammoReduction = ammoChancePenalty;
     if(currentLevel >= 1){
-      // True Hell: only black orbs and green ammo orbs
-      type = Math.random() < 0.45 ? 'ammo' : 'slow';
+      // True Hell: only black orbs and green ammo orbs (65% base - penalty)
+      const ammoChance = Math.max(0.10, 0.65 - ammoReduction);
+      type = Math.random() < ammoChance ? 'ammo' : 'slow';
     } else {
-      // Hell's Gate: red 25%, ammo 40%, black 35%
+      // Hell's Gate: red 10%, ammo (75% base - penalty), black rest
+      const ammoChance = Math.max(0.10, 0.75 - ammoReduction);
       const r = Math.random();
-      if(r < 0.25) type = 'life';
-      else if(r < 0.65) type = 'ammo';
+      if(r < 0.10) type = 'life';
+      else if(r < 0.10 + ammoChance) type = 'ammo';
       else type = 'slow';
     }
   } else {
@@ -376,6 +392,7 @@ function loseLife(){
 function reset(){
   player.y = H/2; player.vy = 0; pipes = []; score = 0; tick = 0;
   running = true; gameOver = false; showLeaderboard = false; scoreSubmitted = false;
+  doomEndingTimer = 0; doomEndingTriggered = false;
   currentLevel = 0; pipesCleared = 0; levelUpTimer = 0;
   lives = MAX_LIVES; invincibleTimer = 0;
   orbs = []; orbSpawnTimer = 0; orbPickupTimer = 0; orbPickupText = '';
@@ -388,6 +405,7 @@ function reset(){
   shotgunBlasts = [];
   rageCooldown = 0; trueRageTimer = 0; trueRageFlash = 0;
   slowTimer = 0;
+  lastScaleTier = 0; scoreMultiplier = 1; ammoChancePenalty = 0;
   accumulator = 0; last = 0;
   nameInputDiv.classList.add('hidden');
   leaderboardDiv.classList.add('hidden');
@@ -405,6 +423,8 @@ function pauseBackgroundMusic(){
 }
 
 function resumeBackgroundMusic(){
+  // No music during the "Only DOOM from now on" black screen
+  if(doomEndingTriggered) return;
   const cfg = getLevelConfig();
   if(cfg.hellGate){
     if(hellGateMusic) switchToHellGateMusic();
@@ -549,6 +569,18 @@ function update(){
 
   const cfg = getLevelConfig();
   const effectiveSpeed = (slowTimer > 0) ? cfg.speed * SLOW_FACTOR : cfg.speed;
+
+  // --- Scaling: every 5000 score doubles points, reduces ammo chance by 5% ---
+  const currentTier = Math.floor(score / 5000);
+  if(currentTier > lastScaleTier){
+    const tiersGained = currentTier - lastScaleTier;
+    for(let t = 0; t < tiersGained; t++){
+      scoreMultiplier *= 2;
+      ammoChancePenalty += 0.05;
+    }
+    lastScaleTier = currentTier;
+  }
+
   // Don't spawn pipes during true rage
   if(tick % cfg.spawnRate === 0 && trueRageTimer <= 0) spawnPipe();
   tick++;
@@ -574,10 +606,18 @@ function update(){
     p.x -= effectiveSpeed;
     if(p.x + 40 < 0) pipes.splice(i,1);
 
-    // score (3x during overcharge)
+    // score (5x during overcharge)
     if(!p.passed && p.x + 40 < player.x){
       p.passed = true; pipesCleared++;
-      score += cfg.pointMultiplier * (overcharged ? 3 : 1);
+      score += cfg.pointMultiplier * (overcharged ? 5 : 1) * scoreMultiplier;
+      // Normal mode: end the game at 1500 with a special message
+      if(!isDoomMode && score >= 1500 && !doomEndingTriggered){
+        doomEndingTriggered = true;
+        doomEndingTimer = DOOM_ENDING_DURATION;
+        running = false;
+        pauseBackgroundMusic();
+        doomButtonsDiv.classList.add('hidden');
+      }
     }
 
     // collision (skip if invincible)
@@ -593,8 +633,9 @@ function update(){
   }
 
   // --- Orb spawning & movement ---
+  const orbInterval = isDoomMode ? DOOM_ORB_SPAWN_INTERVAL : ORB_SPAWN_INTERVAL;
   orbSpawnTimer++;
-  if(orbSpawnTimer >= ORB_SPAWN_INTERVAL){
+  if(orbSpawnTimer >= orbInterval){
     orbSpawnTimer = 0;
     if(Math.random() < orbSpawnChance){
       spawnOrb();
@@ -632,9 +673,12 @@ function update(){
           }
         }
       } else if(o.type === 'ammo'){
-        // Green ammo orb: +3 shotgun ammo
-        shotgunAmmo += AMMO_PER_PICKUP;
-        orbPickupText = '🟢 +3 Ammo!';
+        // Green ammo orb: +6 shotgun ammo (uncapped at 50k score, otherwise capped at MAX_AMMO)
+        const prev = shotgunAmmo;
+        const effectiveMax = score >= 50000 ? Infinity : MAX_AMMO;
+        shotgunAmmo = Math.min(shotgunAmmo + AMMO_PER_PICKUP, effectiveMax);
+        const gained = shotgunAmmo - prev;
+        orbPickupText = gained > 0 ? `🟢 +${gained} Ammo!` : '🟢 Ammo Full!';
       } else if(o.type === 'slow'){
         // DOOM black orb: slows player for 3 seconds
         slowTimer = SLOW_DURATION;
@@ -677,14 +721,30 @@ function update(){
     const s = shotgunProjectiles[i];
     s.x += SHOTGUN_SPEED;
     if(s.x > W + SHOTGUN_LENGTH){ shotgunProjectiles.splice(i, 1); continue; }
-    // Only destroys the FIRST pipe it hits
+    // Splash damage: on first pipe hit, explode and destroy all pipes within blast radius
+    const SPLASH_RADIUS = 80;
+    let hitPipe = false;
     for(let j = pipes.length - 1; j >= 0; j--){
       const p = pipes[j];
       if(s.x + SHOTGUN_LENGTH > p.x && s.x < p.x + 40){
-        pipes.splice(j, 1);
-        shotgunProjectiles.splice(i, 1); // shotgun slug is consumed
-        // Blast animation at impact point
-        shotgunBlasts.push({ x: s.x + SHOTGUN_LENGTH, y: s.y, timer: 20, maxTimer: 20 });
+        hitPipe = true;
+        // Explosion at impact point
+        const explosionX = s.x + SHOTGUN_LENGTH;
+        const explosionY = s.y;
+        shotgunBlasts.push({ x: explosionX, y: explosionY, timer: 24, maxTimer: 24 });
+        // Destroy all pipes within splash radius
+        for(let k = pipes.length - 1; k >= 0; k--){
+          const pk = pipes[k];
+          const pCenterX = pk.x + 20;
+          const pCenterY = pk.top + pk.gap / 2;
+          const dx = pCenterX - explosionX;
+          const dy = pCenterY - explosionY;
+          if(Math.sqrt(dx*dx + dy*dy) < SPLASH_RADIUS){
+            pipes.splice(k, 1);
+            // Extra small blast on each splashed pipe
+            shotgunBlasts.push({ x: pCenterX, y: pCenterY, timer: 16, maxTimer: 16 });
+          }
+        }
         // Gain a heart on successful hit
         if(lives < MAX_LIVES + MAX_BLUE_HEARTS){
           lives++;
@@ -694,6 +754,9 @@ function update(){
         }
         break;
       }
+    }
+    if(hitPipe){
+      shotgunProjectiles.splice(i, 1); // slug consumed after explosion
     }
   }
 }
@@ -891,6 +954,38 @@ function draw(){
       ctx.stroke();
     }
     if(invincibleTimer > 0){ ctx.restore(); }
+
+    // --- Draw Shotgun Model (DOOM mode only) ---
+    if(isDoomMode){
+      ctx.save();
+      const sx = player.x + player.r * 0.4;  // slightly right of center
+      const sy = player.y + player.r * 0.15;  // slightly below center
+      // Barrel
+      ctx.fillStyle = '#555';
+      ctx.fillRect(sx, sy - 2, 22, 4);  // main barrel
+      // Barrel tip / muzzle
+      ctx.fillStyle = '#333';
+      ctx.fillRect(sx + 20, sy - 3, 4, 6);
+      // Receiver body
+      ctx.fillStyle = '#666';
+      ctx.fillRect(sx - 4, sy - 3, 10, 6);
+      // Pump grip
+      ctx.fillStyle = '#8B6914';
+      ctx.fillRect(sx + 8, sy + 2, 8, 3);
+      // Stock
+      ctx.fillStyle = '#6B4400';
+      ctx.beginPath();
+      ctx.moveTo(sx - 4, sy - 3);
+      ctx.lineTo(sx - 12, sy + 5);
+      ctx.lineTo(sx - 8, sy + 6);
+      ctx.lineTo(sx - 2, sy + 3);
+      ctx.closePath();
+      ctx.fill();
+      // Barrel shine highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillRect(sx + 2, sy - 2, 16, 1.5);
+      ctx.restore();
+    }
   }
 
   // --- Draw Beams ---
@@ -1193,6 +1288,38 @@ function loop(ts){
     ctx.fillStyle = '#ff3333';
     ctx.font = 'bold 22px sans-serif';
     ctx.fillText('They fear you.', W/2, H/2 + 20);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.restore();
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  // "Only DOOM from now on" ending screen
+  if(doomEndingTimer > 0){
+    while(accumulator >= FIXED_DT){
+      doomEndingTimer--;
+      accumulator -= FIXED_DT;
+      if(doomEndingTimer <= 0){
+        doomEndingTimer = 0;
+        gameOver = true;
+        finalScore = score;
+        break;
+      }
+    }
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    // Fade red text in
+    const progress = 1 - (doomEndingTimer / DOOM_ENDING_DURATION);
+    const textAlpha = Math.min(1, progress * 3); // fast fade in
+    ctx.save();
+    ctx.globalAlpha = textAlpha;
+    ctx.fillStyle = '#cc0000';
+    ctx.font = 'bold 32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Only DOOM from now on.', W/2, H/2);
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.restore();
