@@ -10,6 +10,17 @@
     <div class="wrap">
       <canvas id="game" width="480" height="640"></canvas>
       <div class="info">Press Space / Click to flap</div>
+      <!-- DOOM mobile buttons (shown only during DOOM mode gameplay) -->
+      <div id="doom-buttons" class="hidden" style="position:absolute;bottom:16px;left:0;right:0;display:flex;justify-content:center;gap:16px;pointer-events:none;">
+        <button id="btn-shotgun" style="pointer-events:auto;padding:10px 18px;font-size:16px;font-weight:bold;background:#444;color:#ff6633;border:2px solid #ff6633;border-radius:8px;">🔫 Shotgun</button>
+        <button id="btn-rage" style="pointer-events:auto;padding:10px 18px;font-size:16px;font-weight:bold;background:#440000;color:#ff3333;border:2px solid #ff3333;border-radius:8px;">🔥 Rage</button>
+      </div>
+      <div id="mode-select" class="overlay hidden">
+        <h2>Select Mode</h2>
+        <button id="btn-normal" style="display:block;width:220px;margin:8px auto;">Normal Mode</button>
+        <button id="btn-doom" class="hidden" style="display:none;width:220px;margin:8px auto;background:#8b0000;color:#ffe033;font-weight:bold;">🔥 DOOM Mode 🔥</button>
+        <p id="doom-locked" style="color:#666;font-size:13px;margin-top:8px;">Reach Level 7 to unlock DOOM Mode</p>
+      </div>
       <div id="name-input" class="overlay hidden">
         <h2>Game Over! Score: <span id="final-score"></span></h2>
         <input type="text" id="player-name" placeholder="Enter your name" maxlength="20">
