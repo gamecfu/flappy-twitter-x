@@ -80,7 +80,7 @@ function loadImages(cb){
 }
 
 let last = 0;
-const gravity = 0.45;
+const gravity = 0.32;
 
 // Fixed timestep: game logic always runs at 60 ticks/sec
 const FIXED_DT = 1000 / 60;    // ~16.67ms per tick
@@ -100,12 +100,12 @@ let running = true;
 
 // --- Level System ---
 const levels = [
-  { name: 'Level 1 — Easy',       threshold: 0,   speed: 2.6, spawnRate: 90, gap: 150, pointMultiplier: 1 },
-  { name: 'Level 2 — Normal',     threshold: 5,   speed: 3.2, spawnRate: 80, gap: 140, pointMultiplier: 2 },
-  { name: 'Level 3 — Hard',       threshold: 15,  speed: 3.8, spawnRate: 68, gap: 130, pointMultiplier: 3 },
-  { name: 'Level 4 — Very Hard',  threshold: 30,  speed: 4.5, spawnRate: 56, gap: 120, pointMultiplier: 4 },
-  { name: 'Level 5 — Insane',     threshold: 50,  speed: 5.2, spawnRate: 45, gap: 110, pointMultiplier: 5 },
-  { name: 'Level 6 — Impossible', threshold: 80,  speed: 6.0, spawnRate: 36, gap: 100, pointMultiplier: 7 },
+  { name: 'Level 1 — Easy',       threshold: 0,   speed: 1.8, spawnRate: 100, gap: 155, pointMultiplier: 1 },
+  { name: 'Level 2 — Normal',     threshold: 5,   speed: 2.2, spawnRate: 90,  gap: 145, pointMultiplier: 2 },
+  { name: 'Level 3 — Hard',       threshold: 15,  speed: 2.7, spawnRate: 78,  gap: 135, pointMultiplier: 3 },
+  { name: 'Level 4 — Very Hard',  threshold: 30,  speed: 3.2, spawnRate: 65,  gap: 125, pointMultiplier: 4 },
+  { name: 'Level 5 — Insane',     threshold: 50,  speed: 3.7, spawnRate: 54,  gap: 115, pointMultiplier: 5 },
+  { name: 'Level 6 — Impossible', threshold: 80,  speed: 4.3, spawnRate: 44,  gap: 105, pointMultiplier: 7 },
 ];
 
 let currentLevel = 0;
@@ -617,7 +617,7 @@ function loop(ts){
 }
 
 function flap(){
-  player.vy = -7.5;
+  player.vy = -6.0;
 }
 
 window.addEventListener('keydown', e => {
